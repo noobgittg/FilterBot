@@ -1,8 +1,10 @@
-#  @MrMNTG @MusammilN
+from pyrogram import filters, Client
+from pyrogram.types import Message
+from utils import JOIN_REQUEST_USERS
+from info import ADMINS
 from pyrogram import Client
 from pyrogram.types import ChatJoinRequest
 from database.users_chats_db import db
-from utils import JOIN_REQUEST_USERS
 
 @Client.on_chat_join_request()
 async def join_request_handler(client, update: ChatJoinRequest):
@@ -15,4 +17,7 @@ async def join_request_handler(client, update: ChatJoinRequest):
             JOIN_REQUEST_USERS[user_id] = set()
         JOIN_REQUEST_USERS[user_id].add(chat_id)
 
-#  @MrMNTG @MusammilN
+@Client.on_message(filters.command("clear_join_users") & filters.user(ADMINS))
+async def clear_join_users(_, message: Message):
+    JOIN_REQUEST_USERS.clear()
+    await message.reply_text("✅ Cleared all join request users.")
