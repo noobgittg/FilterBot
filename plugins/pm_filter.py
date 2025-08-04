@@ -191,6 +191,328 @@ async def advantage_spoll_choker(bot, query):
             await asyncio.sleep(10)
             await k.delete()
 
+@Client.on_callback_query()
+async def cb_handler(client: Client, query: CallbackQuery):
+    if query.data == "close_data":
+        await query.message.delete()
+
+    elif query.data == "delallconfirm":
+        userid = query.from_user.id
+        chat_type = query.message.chat.type
+
+        if chat_type == enums.ChatType.PRIVATE:
+            grpid = await active_connection(str(userid))
+            if grpid is not None:
+                grp_id = grpid
+                try:
+                    chat = await client.get_chat(grpid)
+                    title = chat.title
+                except:
+                    await query.message.edit_text("Make sure I'm present in your group!!", quote=True)
+                    return await query.answer('Piracy Is Crime')
+            else:
+                await query.message.edit_text(
+                    "I'm not connected to any groups!\nCheck /connections or connect to any groups",
+                    quote=True
+                )
+                return await query.answer('THIS IS A OPEN SOURCE PROJECT SEARCH SHOBANAFILTERBOT IN GITHUB ')
+        elif chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
+            grp_id = query.message.chat.id
+            title = query.message.chat.title
+        else:
+            return await query.answer('Piracy Is Crime')
+
+        st = await client.get_chat_member(grp_id, userid)
+        if (st.status == enums.ChatMemberStatus.OWNER) or (str(userid) in ADMINS):
+            await del_all(query.message, grp_id, title)
+        else:
+            await query.answer("You need to be Group Owner or an Auth User to do that!", show_alert=True)
+
+    elif query.data == "delallcancel":
+        userid = query.from_user.id
+        chat_type = query.message.chat.type
+        if chat_type == enums.ChatType.PRIVATE:
+            await query.message.reply_to_message.delete()
+            await query.message.delete()
+        elif chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
+            grp_id = query.message.chat.id
+            st = await client.get_chat_member(grp_id, userid)
+            if (st.status == enums.ChatMemberStatus.OWNER) or (str(userid) in ADMINS):
+                await query.message.delete()
+                try:
+                    await query.message.reply_to_message.delete()
+                except:
+                    pass
+            else:
+                await query.answer("That's not for you!!", show_alert=True)
+
+    elif "groupcb" in query.data:
+        await query.answer()
+        group_id = query.data.split(":")[1]
+        act = query.data.split(":")[2]
+        hr = await client.get_chat(int(group_id))
+        title = hr.title
+        stat = "DISCONNECT" if act else "CONNECT"
+        cb = "disconnect" if act else "connectcb"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"{stat}", callback_data=f"{cb}:{group_id}"),
+             InlineKeyboardButton("DELETE", callback_data=f"deletecb:{group_id}")],
+            [InlineKeyboardButton("BACK", callback_data="backcb")]
+        ])
+        await query.message.edit_text(
+            f"Group Name : **{title}**\nGroup ID : `{group_id}`",
+            reply_markup=keyboard,
+            parse_mode=enums.ParseMode.MARKDOWN
+        )
+        return await query.answer('Piracy Is Crime')
+
+    elif "connectcb" in query.data:
+        await query.answer()
+        group_id = query.data.split(":")[1]
+        title = (await client.get_chat(int(group_id))).title
+        user_id = query.from_user.id
+        mkact = await make_active(str(user_id), str(group_id))
+        msg = f"Connected to **{title}**" if mkact else 'Some error occurred!!'
+        await query.message.edit_text(msg, parse_mode=enums.ParseMode.MARKDOWN)
+        return await query.answer('Piracy Is Crime')
+
+    elif "disconnect" in query.data:
+        await query.answer()
+        group_id = query.data.split(":")[1]
+        title = (await client.get_chat(int(group_id))).title
+        user_id = query.from_user.id
+        mkinact = await make_inactive(str(user_id))
+        msg = f"Disconnected from **{title}**" if mkinact else 'Some error occurred!!'
+        await query.message.edit_text(msg, parse_mode=enums.ParseMode.MARKDOWN)
+        return await query.answer('Piracy Is Crime')
+
+    elif "deletecb" in query.data:
+        await query.answer()
+        user_id = query.from_user.id
+        group_id = query.data.split(":")[1]
+        delcon = await delete_connection(str(user_id), str(group_id))
+        msg = "Successfully deleted connection" if delcon else "Some error occurred!!"
+        await query.message.edit_text(msg, parse_mode=enums.ParseMode.MARKDOWN)
+        return await query.answer('Piracy Is Crime')
+
+    elif query.data == "backcb":
+        await query.answer()
+        userid = query.from_user.id
+        groupids = await all_connections(str(userid))
+        if groupids is None:
+            await query.message.edit_text("There are no active connections!! Connect to some groups first.")
+            return await query.answer('Piracy Is Crime')
+        buttons = []
+        for groupid in groupids:
+            try:
+                title = (await client.get_chat(int(groupid))).title
+                active = await if_active(str(userid), str(groupid))
+                act = " - ACTIVE" if active else ""
+                buttons.append([
+                    InlineKeyboardButton(text=f"{title}{act}", callback_data=f"groupcb:{groupid}:{act}")
+                ])
+            except:
+                pass
+        await query.message.edit_text(
+            "Your connected group details ;\n\n",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    elif "alertmessage" in query.data:
+        grp_id = query.message.chat.id
+        i = query.data.split(":")[1]
+        keyword = query.data.split(":")[2]
+        _, _, alerts, _ = await find_filter(grp_id, keyword)
+        if alerts:
+            alert = ast.literal_eval(alerts)[int(i)]
+            alert = alert.replace("\\n", "\n").replace("\\t", "\t")
+            await query.answer(alert, show_alert=True)
+
+    elif query.data.startswith("file"):
+        _, file_id = query.data.split("#")
+        files_ = await get_file_details(file_id)
+        if not files_:
+            return await query.answer('No such file exist.')
+        files = files_[0]
+        title = files.file_name
+        size = get_size(files.file_size)
+        f_caption = files.caption
+        settings = await get_settings(query.message.chat.id)
+        if CUSTOM_FILE_CAPTION:
+            try:
+                f_caption = CUSTOM_FILE_CAPTION.format(
+                    file_name=title or '',
+                    file_size=size or '',
+                    file_caption=f_caption or ''
+                )
+            except Exception as e:
+                logger.exception(e)
+        if f_caption is None:
+            f_caption = f"{title}"
+
+        try:
+            if not await is_subscribed(query.from_user.id, client):
+                invite_links = await create_invite_links(client)
+                first_link = next(iter(invite_links.values()), f"https://t.me/{temp.U_NAME}?start=file_{file_id}")
+                return await query.answer(url=first_link)
+            await query.answer(url=f"https://t.me/{temp.U_NAME}?start=file_{file_id}")
+        except UserIsBlocked:
+            await query.answer('Unblock the bot mahn !', show_alert=True)
+        except PeerIdInvalid:
+            await query.answer(url=f"https://t.me/{temp.U_NAME}?start=file_{file_id}")
+        except Exception:
+            await query.answer(url=f"https://t.me/{temp.U_NAME}?start=file_{file_id}")
+
+    elif query.data.startswith("checksub"):
+        if not await is_subscribed(query.from_user.id, client):
+            await query.answer("I Like Your Smartness, But Don't Be Oversmart", show_alert=True)
+            return
+        _, file_id = query.data.split("#")
+        files_ = await get_file_details(file_id)
+        if not files_:
+            return await query.answer('No such file exist.')
+        files = files_[0]
+        title = files.file_name
+        size = get_size(files.file_size)
+        f_caption = files.caption
+        if CUSTOM_FILE_CAPTION:
+            try:
+                f_caption = CUSTOM_FILE_CAPTION.format(
+                    file_name=title or '',
+                    file_size=size or '',
+                    file_caption=f_caption or ''
+                )
+            except Exception as e:
+                logger.exception(e)
+        if f_caption is None:
+            f_caption = f"{title}"
+        await query.answer()
+        await client.send_cached_media(
+            chat_id=query.from_user.id,
+            file_id=file_id,
+            caption=f_caption,
+            protect_content=True if _.endswith('p') else False
+        )
+
+    elif query.data in ["esp", "msp", "hsp", "tsp"]:
+        txt_map = {
+            "esp": script.ENG_SPELL,
+            "msp": script.MAL_SPELL,
+            "hsp": script.HIN_SPELL,
+            "tsp": script.TAM_SPELL
+        }
+        await query.answer(text=txt_map[query.data], show_alert=True)
+
+    elif query.data == "start":
+        buttons = [[
+            InlineKeyboardButton('➕ Add Me To Your Groups', url=f'http://t.me/{temp.U_NAME}?startgroup=true')
+        ], [
+            InlineKeyboardButton('📖 Help', callback_data='help'),
+            InlineKeyboardButton('ℹ️ About', callback_data='about')
+        ]]
+        await query.message.edit_text(
+            text=script.START_TXT.format(query.from_user.mention, temp.U_NAME, temp.B_NAME),
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+        await query.answer('Piracy Is Crime')
+
+    elif query.data == "help":
+        buttons = [[
+            InlineKeyboardButton('🔧 Mᴀɴᴜᴀʟ Fɪʟᴛᴇʀ', callback_data='manuelfilter'),
+            InlineKeyboardButton('⚙️ Aᴜᴛᴏ Fɪʟᴛᴇʀ', callback_data='autofilter')
+        ], [
+            InlineKeyboardButton('🔗 Cᴏɴɴᴇᴄᴛɪᴏɴ', callback_data='coct'),
+            InlineKeyboardButton('✨ Exᴛʀᴀ Tʜɪɴɢs', callback_data='extra')
+        ], [
+            InlineKeyboardButton('🏠 Hᴏᴍᴇ', callback_data='start'),
+            InlineKeyboardButton('🚶‍♂️ Bᴀᴄᴋ', callback_data='start')
+        ]]
+        await query.message.edit_text(
+            text=script.HELP_TXT.format(query.from_user.mention),
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data == "about":
+        await query.message.edit_text(
+            text=script.ABOUT_TXT.format(temp.B_NAME),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🚶‍♂️ ʙᴀᴄᴋ', callback_data='start')]]),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data == "source":
+        await query.message.edit_text(
+            text=script.SOURCE_TXT,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🚶‍♂️ ʙᴀᴄᴋ', callback_data='about')]]),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data == "manuelfilter":
+        await query.message.edit_text(
+            text=script.MANUELFILTER_TXT,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton('🚶‍♂️ ʙᴀᴄᴋ', callback_data='help'),
+                 InlineKeyboardButton('🎯 ʙᴜᴛᴛᴏɴ', callback_data='button')]
+            ]),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data == "button":
+        await query.message.edit_text(
+            text=script.BUTTON_TXT,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🚶‍♂️ ʙᴀᴄᴋ', callback_data='help')]]),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data == "autofilter":
+        await query.message.edit_text(
+            text=script.AUTOFILTER_TXT,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🚶‍♂️ ʙᴀᴄᴋ', callback_data='help')]]),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data == "coct":
+        await query.message.edit_text(
+            text=script.CONNECTION_TXT,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🚶‍♂️ ʙᴀᴄᴋ', callback_data='help')]]),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data == "extra":
+        await query.message.edit_text(
+            text=script.EXTRAMOD_TXT,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton('🚶‍♂️ ʙᴀᴄᴋ', callback_data='help'),
+                 InlineKeyboardButton('🧑‍💼 ᴀᴅᴍɪɴ', callback_data='admin')]
+            ]),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data == "admin":
+        await query.message.edit_text(
+            text=script.ADMIN_TXT,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🚶‍♂️ ʙᴀᴄᴋ', callback_data='help')]]),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data == "stats" or query.data == "rfrsh":
+        if query.data == "rfrsh":
+            await query.answer("Fetching MongoDb DataBase")
+        total = await Media.count_documents()
+        users = await db.total_users_count()
+        chats = await db.total_chat_count()
+        monsize = await db.get_db_size()
+        free = 536870912 - monsize
+        await query.message.edit_text(
+            text=script.STATUS_TXT.format(total, users, chats, get_size(monsize), get_size(free)),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton('🚶‍♂️ ʙᴀᴄᴋ', callback_data='help'),
+                 InlineKeyboardButton('🔄', callback_data='rfrsh')]
+            ]),
+            parse_mode=enums.ParseMode.HTML
+        )
+
 
 async def auto_filter(client, msg, spoll=False):
     if not spoll:
