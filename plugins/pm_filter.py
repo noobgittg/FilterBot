@@ -32,16 +32,39 @@ BUTTONS = {}
 SPELL_CHECK = {}
 
 
-@Client.on_message(filters.group | filters.private & filters.text & filters.incoming) 
+@Client.on_message(filters.group & filters.text & filters.incoming)
 async def give_filter(client, message):
-    try:
-        await message.delete()
-    except Exception as e:
-        logger.exception("Failed to delete message:", e)
-
     k = await manual_filters(client, message)
     if k == False:
         await auto_filter(client, message)
+
+@Client.on_message(filters.private & filters.text & filters.incoming)
+async def pm_text(bot, message):
+    content = message.text
+    user = message.from_user.first_name
+    user_id = message.from_user.id
+
+    if content.startswith("/") or content.startswith("#"):
+        return
+
+    await message.reply_text(
+        "<b>🚫 ᴘᴇʀꜱᴏɴᴀʟ ᴄʜᴀᴛ ɴᴏᴛ ᴀʟʟᴏᴡᴇᴅ !</b>\n\n"
+        "<blockquote>🗣️ ᴅᴇᴀʀ ᴜꜱᴇʀ, ɪ'ᴍ ɴᴏᴛ ᴀᴄᴛɪᴠᴇ ɪɴ ᴘᴍ.\n"
+        "🎬 ꜱᴇᴀʀᴄʜ ᴍᴏᴠɪᴇꜱ, ᴀꜱᴋ ꜰᴏʀ ʀᴇǫᴜᴇꜱᴛꜱ, ᴇᴛᴄ., ɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ ɢɪᴠᴇɴ ʙᴇʟᴏᴡ.</blockquote>",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🍿 ʀᴇǫᴜᴇꜱᴛ / ꜱᴇᴀʀᴄʜ ʜᴇʀᴇ", url="https://t.me/+kHxHj29XTaxkYzg1")]]
+        )
+    )
+
+    await bot.send_message(
+        chat_id=LOG_CHANNEL,
+        text=(
+            f"<b>Name:</b> {user}\n"
+            f"<b>ID:</b> <code>{user_id}</code>\n"
+            f"<b>Message:</b>\n<blockquote>{content}</blockquote>"
+        )
+    )  
+    
 
 @Client.on_callback_query(filters.regex(r"^next"))
 async def next_page(bot, query):
