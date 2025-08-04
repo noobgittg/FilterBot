@@ -460,13 +460,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
     elif query.data == "tsp":
         await query.answer(text=script.TAM_SPELL, show_alert="true")
         
-    elif query.data == "start":
+elif query.data == "start":
     buttons = [[
-        InlineKeyboardButton('💠 ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘꜱ', url=f'http://t.me/{temp.U_NAME}?startgroup=true')
-    ],[
-        InlineKeyboardButton('📜 ʜᴇʟᴘ', callback_data='help'),
-        InlineKeyboardButton('ℹ️ ᴀʙᴏᴜᴛ', callback_data='about')
-    ]]
+            InlineKeyboardButton('➕ Add Me To Your Groups', url=f'http://t.me/{temp.U_NAME}?startgroup=true')
+        ],[
+            InlineKeyboardButton('📖 Help', callback_data='help'),
+            InlineKeyboardButton('ℹ️ About', callback_data='about')
+        ]]
     await query.message.edit_text(
         text=script.START_TXT.format(query.from_user.mention, temp.U_NAME, temp.B_NAME),
         reply_markup=InlineKeyboardMarkup(buttons),
@@ -609,7 +609,6 @@ elif query.data == "rfrsh":
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode=enums.ParseMode.HTML
     )
-
 
     elif query.data.startswith("setgs"):
         ident, set_type, status, grp_id = query.data.split("#")
